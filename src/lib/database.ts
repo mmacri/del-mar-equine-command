@@ -277,8 +277,9 @@ export async function initializeDatabase() {
     }
   ]);
 
-  // Create sample horses
+  // Create sample horses with enhanced data
   const horses = [];
+  const activities = ['training', 'walking', 'racing', 'resting', 'medical'];
   for (let i = 1; i <= 50; i++) {
     horses.push({
       tracking_id: `DM${new Date().getFullYear()}${String(i).padStart(4, '0')}`,
@@ -290,11 +291,63 @@ export async function initializeDatabase() {
       gender: ['stallion', 'mare', 'gelding'][i % 3] as 'stallion' | 'mare' | 'gelding',
       owner_id: i % 2 === 0 ? owner1Id : owner2Id,
       status: 'active' as const,
+      current_location_id: (i % 6) + 1, // Assign to locations 1-6
+      current_activity: activities[i % activities.length],
       created_at: new Date(),
       updated_at: new Date()
     });
   }
-  await db.horses.bulkAdd(horses);
+  const horseIds = await db.horses.bulkAdd(horses, { allKeys: true });
+
+  // Create location assignments for each horse
+  const locationAssignments = horseIds.map((horseId, index) => ({
+    horse_id: horseId,
+    location_id: ((index % 6) + 1),
+    assigned_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random time in last week
+    assigned_by: adminUserId,
+    notes: `Initial assignment for Horse ${index + 1}`
+  }));
+  await db.location_assignments.bulkAdd(locationAssignments);
+
+  // Create sample races
+  const races = [];
+  for (let i = 1; i <= 10; i++) {
+    const raceDate = new Date();
+    raceDate.setDate(raceDate.getDate() + (i * 7) - 35); // Races over 10 weeks
+    
+    races.push({
+      name: `Del Mar Race ${i}`,
+      race_date: raceDate,
+      track: 'Del Mar Racetrack',
+      distance: ['1 mile', '1.25 miles', '1.5 miles'][i % 3],
+      purse: 50000 + (i * 10000),
+      race_type: ['Stakes', 'Allowance', 'Maiden'][i % 3],
+      status: raceDate < new Date() ? 'completed' as const : 'scheduled' as const,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+  }
+  const raceIds = await db.races.bulkAdd(races, { allKeys: true });
+
+  // Create race participants
+  const raceParticipants = [];
+  raceIds.forEach((raceId, raceIndex) => {
+    // 5-8 horses per race
+    const numParticipants = 5 + (raceIndex % 4);
+    for (let p = 0; p < numParticipants; p++) {
+      const horseId = horseIds[(raceIndex * 5 + p) % horseIds.length];
+      raceParticipants.push({
+        race_id: raceId,
+        horse_id: horseId,
+        jockey_name: `Jockey ${(p + 1)}`,
+        post_position: p + 1,
+        odds: `${3 + p}:1`,
+        finish_position: races[raceIndex].status === 'completed' ? p + 1 : undefined,
+        created_at: new Date()
+      });
+    }
+  });
+  await db.race_participants.bulkAdd(raceParticipants);
 
   console.log('Database initialized with sample data');
 }
