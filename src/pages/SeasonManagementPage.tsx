@@ -618,7 +618,13 @@ export default function SeasonManagementPage() {
                         <Button onClick={handleCSVImport} disabled={!csvFile}>
                           Import CSV Data
                         </Button>
-                        <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setCsvFile(null);
+                            setIsImportDialogOpen(false);
+                          }}
+                        >
                           Cancel
                         </Button>
                       </div>
