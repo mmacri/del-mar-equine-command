@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { db, Horse, Location, LocationAssignment } from '@/lib/database';
+import { db, Horse, Location, LocationAssignment, Owner } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertTriangle, CheckCircle, Clock, Eye } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 interface HorseStatus {
-  horse: Horse;
+  horse: Horse & { owner?: Owner };
   location?: Location;
   assignment?: LocationAssignment;
   status: 'green' | 'yellow' | 'red' | 'grey';
@@ -14,6 +16,7 @@ interface HorseStatus {
 }
 
 export function CommandCenter() {
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
   const [horseStatuses, setHorseStatuses] = useState<HorseStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -22,10 +25,13 @@ export function CommandCenter() {
     setIsLoading(true);
     try {
       const horses = await db.horses.toArray();
+      const owners = await db.owners.toArray();
       const locations = await db.locations.toArray();
       const assignments = await db.location_assignments.toArray();
 
       const statuses: HorseStatus[] = horses.map(horse => {
+        const owner = owners.find(o => o.id === horse.owner_id);
+        const horseWithOwner = { ...horse, owner };
         const assignment = assignments.find(a => a.horse_id === horse.id);
         const location = assignment ? locations.find(l => l.id === assignment.location_id) : undefined;
 
@@ -53,7 +59,7 @@ export function CommandCenter() {
         }
 
         return {
-          horse,
+          horse: horseWithOwner,
           location,
           assignment,
           status,
@@ -78,12 +84,17 @@ export function CommandCenter() {
     return () => clearInterval(interval);
   }, []);
 
+  // Apply filters to horse statuses
+  const filteredHorseStatuses = getFilteredData(horseStatuses, (status, filters, filterData) => 
+    filterFunctions.horses(status.horse, filters, filterData)
+  );
+
   const getStatusCounts = () => {
     const counts = {
-      green: horseStatuses.filter(h => h.status === 'green').length,
-      yellow: horseStatuses.filter(h => h.status === 'yellow').length,
-      red: horseStatuses.filter(h => h.status === 'red').length,
-      grey: horseStatuses.filter(h => h.status === 'grey').length,
+      green: filteredHorseStatuses.filter(h => h.status === 'green').length,
+      yellow: filteredHorseStatuses.filter(h => h.status === 'yellow').length,
+      red: filteredHorseStatuses.filter(h => h.status === 'red').length,
+      grey: filteredHorseStatuses.filter(h => h.status === 'grey').length,
     };
     return counts;
   };
@@ -124,6 +135,15 @@ export function CommandCenter() {
           Refresh
         </Button>
       </div>
+
+      {/* Filters */}
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['owner', 'status', 'location', 'searchTerm']}
+      />
 
       {/* Status Summary */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -195,7 +215,7 @@ export function CommandCenter() {
             </div>
           ) : (
             <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {horseStatuses.map((horseStatus) => (
+              {filteredHorseStatuses.map((horseStatus) => (
                 <div
                   key={horseStatus.horse.id}
                   className={`

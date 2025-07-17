@@ -3,9 +3,9 @@ import { db, Race, RaceParticipant, Horse } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Calendar, Trophy, Clock, MapPin } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 interface RaceWithParticipants extends Race {
   participants: (RaceParticipant & { horse?: Horse })[];
@@ -13,11 +13,9 @@ interface RaceWithParticipants extends Race {
 }
 
 export function RacesPage() {
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
   const [races, setRaces] = useState<RaceWithParticipants[]>([]);
-  const [filteredRaces, setFilteredRaces] = useState<RaceWithParticipants[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [timeFilter, setTimeFilter] = useState<string>('all');
 
   const loadRaces = async () => {
@@ -46,7 +44,6 @@ export function RacesPage() {
       racesWithParticipants.sort((a, b) => new Date(a.race_date).getTime() - new Date(b.race_date).getTime());
 
       setRaces(racesWithParticipants);
-      setFilteredRaces(racesWithParticipants);
     } catch (error) {
       console.error('Error loading races:', error);
     } finally {
@@ -58,42 +55,26 @@ export function RacesPage() {
     loadRaces();
   }, []);
 
-  useEffect(() => {
-    let filtered = races;
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(race =>
-        race.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        race.track.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        race.race_type.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(race => race.status === statusFilter);
-    }
-
-    // Apply time filter
+  // Apply filters
+  const baseFilteredRaces = getFilteredData(races, filterFunctions.races);
+  
+  // Apply additional time filter
+  const filteredRaces = baseFilteredRaces.filter(race => {
     const now = new Date();
     if (timeFilter === 'upcoming') {
-      filtered = filtered.filter(race => new Date(race.race_date) > now);
+      return new Date(race.race_date) > now;
     } else if (timeFilter === 'past') {
-      filtered = filtered.filter(race => new Date(race.race_date) <= now);
+      return new Date(race.race_date) <= now;
     } else if (timeFilter === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      filtered = filtered.filter(race => {
-        const raceDate = new Date(race.race_date);
-        return raceDate >= today && raceDate < tomorrow;
-      });
+      const raceDate = new Date(race.race_date);
+      return raceDate >= today && raceDate < tomorrow;
     }
-
-    setFilteredRaces(filtered);
-  }, [races, searchTerm, statusFilter, timeFilter]);
+    return true;
+  });
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -188,46 +169,29 @@ export function RacesPage() {
       </div>
 
       {/* Filters */}
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['status', 'searchTerm']}
+      />
+      
+      {/* Additional Time Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filter Races</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by race name, track, or type..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="upcoming">Upcoming</SelectItem>
-                <SelectItem value="past">Past</SelectItem>
-              </SelectContent>
-            </Select>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Time Range:</label>
+            <select 
+              value={timeFilter} 
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="px-3 py-1 border rounded text-sm"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
           </div>
         </CardContent>
       </Card>

@@ -4,7 +4,6 @@ import { db, Horse, Activity, Race, DrugTest, VeterinaryRecord } from '@/lib/dat
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
   Download, 
@@ -15,6 +14,8 @@ import {
   Users,
   Activity as ActivityIcon
 } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters } from '@/hooks/useUnifiedFilters';
 
 interface ReportData {
   totalHorses: number;
@@ -30,11 +31,11 @@ interface ReportData {
 
 export function ReportsPage() {
   const { user } = useAuth();
+  const { filters, filterData, updateFilter, clearFilters } = useUnifiedFilters();
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [reportType, setReportType] = useState('summary');
   const [dateRange, setDateRange] = useState('current_season');
-  const [selectedOwner, setSelectedOwner] = useState('all');
 
   const loadReportData = async () => {
     setIsLoading(true);
@@ -165,6 +166,15 @@ export function ReportsPage() {
           Download Report
         </Button>
       </div>
+
+      {/* Filters */}
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['owner', 'status', 'race', 'searchTerm']}
+      />
 
       {/* Report Configuration */}
       <Card>

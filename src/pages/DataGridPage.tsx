@@ -2,21 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { db, Horse, Owner, Location } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Search, 
   Download, 
   Upload, 
-  Edit3, 
-  Save, 
-  X, 
-  Filter,
+  Edit3,
   ArrowUpDown,
   MoreHorizontal 
 } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 interface HorseGridData extends Horse {
   ownerName: string;
@@ -24,12 +20,10 @@ interface HorseGridData extends Horse {
 }
 
 export function DataGridPage() {
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
   const [horses, setHorses] = useState<HorseGridData[]>([]);
-  const [filteredHorses, setFilteredHorses] = useState<HorseGridData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedHorses, setSelectedHorses] = useState<number[]>([]);
-  const [editingHorse, setEditingHorse] = useState<number | null>(null);
   const [sortField, setSortField] = useState<keyof HorseGridData>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -54,7 +48,6 @@ export function DataGridPage() {
       });
 
       setHorses(gridData);
-      setFilteredHorses(gridData);
     } catch (error) {
       console.error('Error loading grid data:', error);
     } finally {
@@ -66,33 +59,22 @@ export function DataGridPage() {
     loadGridData();
   }, []);
 
-  useEffect(() => {
-    let filtered = horses;
+  // Apply filters and sorting
+  const baseFilteredHorses = getFilteredData(horses, (horse, filters, filterData) => 
+    filterFunctions.horses(horse, filters, filterData)
+  );
 
-    if (searchTerm) {
-      filtered = filtered.filter(horse =>
-        horse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.tracking_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.breed?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+  const filteredHorses = baseFilteredHorses.sort((a, b) => {
+    let aValue = a[sortField];
+    let bValue = b[sortField];
 
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
+    if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+    if (typeof bValue === 'string') bValue = bValue.toLowerCase();
 
-      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    setFilteredHorses(filtered);
-  }, [horses, searchTerm, sortField, sortDirection]);
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   const handleSort = (field: keyof HorseGridData) => {
     if (sortField === field) {
@@ -197,18 +179,14 @@ export function DataGridPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 items-center">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search horses..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
+          <UnifiedFilters
+            filters={filters}
+            filterData={filterData}
+            onFilterChange={updateFilter}
+            onClearFilters={clearFilters}
+            enabledFilters={['owner', 'status', 'location', 'searchTerm']}
+          />
+          <div className="flex gap-4 items-center mt-4">
             {selectedHorses.length > 0 && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm">

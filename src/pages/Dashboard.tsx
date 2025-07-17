@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { db, Horse, Activity, Race, DrugTest } from '@/lib/database';
+import { db, Horse, Activity, Race, DrugTest, Owner } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -14,9 +14,13 @@ import {
 } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
+  const [allHorses, setAllHorses] = useState<(Horse & { owner?: Owner })[]>([]);
   const [stats, setStats] = useState({
     totalHorses: 0,
     activeHorses: 0,
@@ -43,6 +47,15 @@ export function Dashboard() {
             horses = await db.horses.where('owner_id').equals(owner.id!).toArray();
           }
         }
+
+        // Get owner information for each horse
+        const owners = await db.owners.toArray();
+        const horsesWithOwners = horses.map(horse => ({
+          ...horse,
+          owner: owners.find(o => o.id === horse.owner_id)
+        }));
+
+        setAllHorses(horsesWithOwners);
 
         const activities = await db.activities
           .orderBy('created_at')
@@ -77,10 +90,19 @@ export function Dashboard() {
     loadDashboardData();
   }, [user]);
 
+  // Apply filters to horses for filtered stats
+  const filteredHorses = getFilteredData(allHorses, filterFunctions.horses);
+  const filteredStats = {
+    totalHorses: filteredHorses.length,
+    activeHorses: filteredHorses.filter(h => h.status === 'active').length,
+    inactiveHorses: filteredHorses.filter(h => h.status === 'inactive').length,
+    injuredHorses: filteredHorses.filter(h => h.status === 'injured').length,
+  };
+
   const statusData = [
-    { name: 'Active', value: stats.activeHorses, color: '#22c55e' },
-    { name: 'Inactive', value: stats.inactiveHorses, color: '#6b7280' },
-    { name: 'Injured', value: stats.injuredHorses, color: '#ef4444' },
+    { name: 'Active', value: filteredStats.activeHorses, color: '#22c55e' },
+    { name: 'Inactive', value: filteredStats.inactiveHorses, color: '#6b7280' },
+    { name: 'Injured', value: filteredStats.injuredHorses, color: '#ef4444' },
   ];
 
   const testData = [
@@ -98,6 +120,15 @@ export function Dashboard() {
         </p>
       </div>
 
+      {/* Filters */}
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['owner', 'status', 'searchTerm']}
+      />
+
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -106,7 +137,7 @@ export function Dashboard() {
             <HorseIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalHorses}</div>
+            <div className="text-2xl font-bold">{filteredStats.totalHorses}</div>
             <p className="text-xs text-muted-foreground">
               Across all categories
             </p>
@@ -119,7 +150,7 @@ export function Dashboard() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.activeHorses}</div>
+            <div className="text-2xl font-bold text-green-600">{filteredStats.activeHorses}</div>
             <p className="text-xs text-muted-foreground">
               Ready for activities
             </p>

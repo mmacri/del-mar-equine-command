@@ -4,17 +4,15 @@ import { db, Horse, Owner } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Eye, Edit } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 export function HorsesPage() {
   const { user } = useAuth();
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
   const [horses, setHorses] = useState<(Horse & { owner?: Owner })[]>([]);
-  const [filteredHorses, setFilteredHorses] = useState<(Horse & { owner?: Owner })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const loadHorses = async () => {
     setIsLoading(true);
@@ -39,7 +37,6 @@ export function HorsesPage() {
       }));
 
       setHorses(horsesWithOwners);
-      setFilteredHorses(horsesWithOwners);
     } catch (error) {
       console.error('Error loading horses:', error);
     } finally {
@@ -51,26 +48,8 @@ export function HorsesPage() {
     loadHorses();
   }, [user]);
 
-  useEffect(() => {
-    let filtered = horses;
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(horse =>
-        horse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.tracking_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.registration_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        horse.owner?.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(horse => horse.status === statusFilter);
-    }
-
-    setFilteredHorses(filtered);
-  }, [horses, searchTerm, statusFilter]);
+  // Apply filters
+  const filteredHorses = getFilteredData(horses, filterFunctions.horses);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -145,38 +124,13 @@ export function HorsesPage() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filter Horses</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, ID, registration, or owner..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="injured">Injured</SelectItem>
-                <SelectItem value="retired">Retired</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['owner', 'status', 'location', 'searchTerm']}
+      />
 
       {/* Horses Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

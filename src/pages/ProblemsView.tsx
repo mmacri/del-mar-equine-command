@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { db, Horse, Location, LocationAssignment } from '@/lib/database';
+import { db, Horse, Location, LocationAssignment, Owner } from '@/lib/database';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw, AlertTriangle, Clock, Search, Filter } from 'lucide-react';
+import { UnifiedFilters } from '@/components/UnifiedFilters';
+import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
 
 interface ProblemHorse {
-  horse: Horse;
+  horse: Horse & { owner?: Owner };
   location?: Location;
   assignment?: LocationAssignment;
   problem: 'critical' | 'warning';
@@ -17,29 +19,31 @@ interface ProblemHorse {
 }
 
 export function ProblemsView() {
+  const { filters, filterData, updateFilter, clearFilters, getFilteredData } = useUnifiedFilters();
   const [problemHorses, setProblemHorses] = useState<ProblemHorse[]>([]);
-  const [filteredHorses, setFilteredHorses] = useState<ProblemHorse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [problemFilter, setProblemFilter] = useState<'all' | 'critical' | 'warning'>('all');
 
   const loadProblemsData = async () => {
     setIsLoading(true);
     try {
       const horses = await db.horses.toArray();
+      const owners = await db.owners.toArray();
       const locations = await db.locations.toArray();
       const assignments = await db.location_assignments.toArray();
 
       const problems: ProblemHorse[] = [];
 
       horses.forEach(horse => {
+        const owner = owners.find(o => o.id === horse.owner_id);
+        const horseWithOwner = { ...horse, owner };
         const assignment = assignments.find(a => a.horse_id === horse.id);
         const location = assignment ? locations.find(l => l.id === assignment.location_id) : undefined;
 
         // Critical problems (Red status)
         if (horse.status === 'injured') {
           problems.push({
-            horse,
+            horse: horseWithOwner,
             location,
             assignment,
             problem: 'critical',
@@ -48,7 +52,7 @@ export function ProblemsView() {
           });
         } else if (!assignment && horse.status === 'active') {
           problems.push({
-            horse,
+            horse: horseWithOwner,
             location,
             assignment,
             problem: 'critical',
@@ -60,7 +64,7 @@ export function ProblemsView() {
         // Warning problems (Yellow status)
         if (horse.current_activity === 'walking' && !assignment) {
           problems.push({
-            horse,
+            horse: horseWithOwner,
             location,
             assignment,
             problem: 'warning',
@@ -74,7 +78,7 @@ export function ProblemsView() {
           const assignmentsInLocation = assignments.filter(a => a.location_id === location.id);
           if (assignmentsInLocation.length > location.capacity) {
             problems.push({
-              horse,
+              horse: horseWithOwner,
               location,
               assignment,
               problem: 'warning',
@@ -86,7 +90,6 @@ export function ProblemsView() {
       });
 
       setProblemHorses(problems);
-      setFilteredHorses(problems);
     } catch (error) {
       console.error('Error loading problems data:', error);
     } finally {
@@ -98,25 +101,15 @@ export function ProblemsView() {
     loadProblemsData();
   }, []);
 
-  useEffect(() => {
-    let filtered = problemHorses;
+  // Apply filters
+  const baseFilteredProblems = getFilteredData(problemHorses, (problem, filters, filterData) =>
+    filterFunctions.horses(problem.horse, filters, filterData)
+  );
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(problem =>
-        problem.horse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        problem.horse.tracking_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        problem.problemText.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply problem type filter
-    if (problemFilter !== 'all') {
-      filtered = filtered.filter(problem => problem.problem === problemFilter);
-    }
-
-    setFilteredHorses(filtered);
-  }, [problemHorses, searchTerm, problemFilter]);
+  // Apply problem type filter
+  const filteredHorses = baseFilteredProblems.filter(problem => 
+    problemFilter === 'all' || problem.problem === problemFilter
+  );
 
   const criticalCount = problemHorses.filter(p => p.problem === 'critical').length;
   const warningCount = problemHorses.filter(p => p.problem === 'warning').length;
@@ -179,33 +172,28 @@ export function ProblemsView() {
       </div>
 
       {/* Filters */}
+      <UnifiedFilters
+        filters={filters}
+        filterData={filterData}
+        onFilterChange={updateFilter}
+        onClearFilters={clearFilters}
+        enabledFilters={['owner', 'status', 'location', 'searchTerm']}
+      />
+      
+      {/* Problem Type Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filter Problems</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by horse name, ID, or problem..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            <Select value={problemFilter} onValueChange={(value: 'all' | 'critical' | 'warning') => setProblemFilter(value)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Problems</SelectItem>
-                <SelectItem value="critical">Critical Only</SelectItem>
-                <SelectItem value="warning">Warnings Only</SelectItem>
-              </SelectContent>
-            </Select>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Problem Type:</label>
+            <select 
+              value={problemFilter} 
+              onChange={(e) => setProblemFilter(e.target.value as 'all' | 'critical' | 'warning')}
+              className="px-3 py-1 border rounded text-sm"
+            >
+              <option value="all">All Problems</option>
+              <option value="critical">Critical Only</option>
+              <option value="warning">Warnings Only</option>
+            </select>
           </div>
         </CardContent>
       </Card>
