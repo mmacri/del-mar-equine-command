@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Upload, Download, Plus, Minus, Users, Calendar, MapPin } from 'lucide-react';
 import { db, Horse as HorseType, Owner, Location, Race } from '@/lib/database';
 import { useToast } from '@/hooks/use-toast';
+import Papa from 'papaparse';
 
 interface SeasonData {
   season: string;
@@ -34,7 +35,7 @@ export default function SeasonManagementPage() {
   const [selectedOwner, setSelectedOwner] = useState<string>('');
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isAddHorseDialogOpen, setIsAddHorseDialogOpen] = useState(false);
-  const [importData, setImportData] = useState('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -115,48 +116,33 @@ export default function SeasonManagementPage() {
     }
   };
 
-  const generateExportData = () => {
-    const exportData = {
-      season: selectedSeason,
-      racetrack: selectedRacetrack,
-      exportDate: new Date().toISOString(),
-      horses: horses.map(horse => ({
-        id: horse.id,
-        name: horse.name,
-        age: horse.age,
-        breed: horse.breed,
-        color: horse.color,
-        gender: horse.gender,
-        status: horse.status,
-        tracking_id: horse.tracking_id,
-        owner_id: horse.owner_id,
-        owner_name: owners.find(o => o.id === horse.owner_id)?.name || '',
-        current_location_id: horse.current_location_id,
-        location_name: locations.find(l => l.id === horse.current_location_id)?.name || '',
-        current_activity: horse.current_activity
-      })),
-      owners: owners.map(owner => ({
-        id: owner.id,
-        name: owner.name,
-        email: owner.email,
-        phone: owner.phone,
-        address: owner.address,
-        horse_count: horses.filter(h => h.owner_id === owner.id).length
-      })),
-      locations: locations.map(location => ({
-        id: location.id,
-        name: location.name,
-        type: location.type,
-        capacity: location.capacity,
-        occupied: horses.filter(h => h.current_location_id === location.id).length
-      }))
-    };
+  const generateCSVExport = () => {
+    // Create horses CSV data
+    const horsesData = horses.map(horse => ({
+      Season: selectedSeason,
+      Racetrack: selectedRacetrack,
+      HorseID: horse.id,
+      HorseName: horse.name,
+      Age: horse.age,
+      Breed: horse.breed,
+      Color: horse.color,
+      Gender: horse.gender,
+      Status: horse.status,
+      TrackingID: horse.tracking_id,
+      OwnerName: owners.find(o => o.id === horse.owner_id)?.name || '',
+      OwnerEmail: owners.find(o => o.id === horse.owner_id)?.email || '',
+      OwnerPhone: owners.find(o => o.id === horse.owner_id)?.phone || '',
+      LocationName: locations.find(l => l.id === horse.current_location_id)?.name || '',
+      LocationType: locations.find(l => l.id === horse.current_location_id)?.type || '',
+      CurrentActivity: horse.current_activity
+    }));
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const csv = Papa.unparse(horsesData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `horses-${selectedSeason}-${selectedRacetrack}-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `horses-${selectedSeason}-${selectedRacetrack}-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -164,100 +150,158 @@ export default function SeasonManagementPage() {
 
     toast({
       title: "Export Complete",
-      description: `Exported ${horses.length} horses for ${selectedSeason} season`,
+      description: `Exported ${horses.length} horses for ${selectedSeason} season as CSV`,
     });
   };
 
-  const handleImport = async () => {
+  const handleCSVImport = async () => {
+    if (!csvFile) return;
+
     try {
-      const data = JSON.parse(importData);
+      const text = await csvFile.text();
       
-      if (!data.horses || !Array.isArray(data.horses)) {
-        throw new Error('Invalid data format');
-      }
+      Papa.parse(text, {
+        header: true,
+        complete: async (results) => {
+          try {
+            const data = results.data as any[];
+            
+            if (data.length === 0) {
+              throw new Error('CSV file is empty');
+            }
 
-      // Validate season and racetrack match current selection
-      if (data.season !== selectedSeason) {
-        throw new Error(`Data is for season ${data.season}, but you have ${selectedSeason} selected. Please switch to the correct season first.`);
-      }
-      
-      if (data.racetrack !== selectedRacetrack) {
-        throw new Error(`Data is for racetrack ${data.racetrack}, but you have ${selectedRacetrack} selected. Please switch to the correct racetrack first.`);
-      }
+            // Validate required columns
+            const requiredColumns = ['Season', 'Racetrack', 'HorseName', 'OwnerName', 'OwnerEmail'];
+            const firstRow = data[0];
+            const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+            
+            if (missingColumns.length > 0) {
+              throw new Error(`Missing required columns: ${missingColumns.join(', ')}`);
+            }
 
-      // Import owners first
-      if (data.owners && Array.isArray(data.owners)) {
-        for (const owner of data.owners) {
-          const existingOwner = await db.owners.where('email').equals(owner.email).first();
-          if (!existingOwner) {
-            await db.owners.add({
-              name: owner.name,
-              email: owner.email,
-              phone: owner.phone || '',
-              address: owner.address || '',
-              created_at: new Date(),
-              updated_at: new Date()
+            // Validate season and racetrack
+            const importSeason = firstRow.Season;
+            const importRacetrack = firstRow.Racetrack;
+            
+            if (importSeason !== selectedSeason) {
+              throw new Error(`CSV is for season ${importSeason}, but you have ${selectedSeason} selected. Please switch to the correct season first.`);
+            }
+            
+            if (importRacetrack !== selectedRacetrack) {
+              throw new Error(`CSV is for racetrack ${importRacetrack}, but you have ${selectedRacetrack} selected. Please switch to the correct racetrack first.`);
+            }
+
+            // Process owners first
+            const uniqueOwners = Array.from(new Map(
+              data.map(row => [`${row.OwnerName}-${row.OwnerEmail}`, {
+                name: row.OwnerName,
+                email: row.OwnerEmail,
+                phone: row.OwnerPhone || '',
+                address: row.OwnerAddress || ''
+              }])
+            ).values());
+
+            for (const owner of uniqueOwners) {
+              const existingOwner = await db.owners.where('email').equals(owner.email).first();
+              if (!existingOwner) {
+                await db.owners.add({
+                  name: owner.name,
+                  email: owner.email,
+                  phone: owner.phone,
+                  address: owner.address,
+                  created_at: new Date(),
+                  updated_at: new Date()
+                });
+              }
+            }
+
+            // Process locations
+            const uniqueLocations = Array.from(new Map(
+              data.filter(row => row.LocationName).map(row => [row.LocationName, {
+                name: row.LocationName,
+                type: row.LocationType || 'Stable',
+                capacity: 50
+              }])
+            ).values());
+
+            for (const location of uniqueLocations) {
+              const existingLocation = await db.locations.where('name').equals(location.name).first();
+              if (!existingLocation) {
+                await db.locations.add({
+                  name: location.name,
+                  type: location.type,
+                  capacity: location.capacity,
+                  current_occupancy: 0,
+                  created_at: new Date(),
+                  updated_at: new Date()
+                });
+              }
+            }
+
+            // Refresh data to get new IDs
+            const [newOwners, newLocations] = await Promise.all([
+              db.owners.toArray(),
+              db.locations.toArray()
+            ]);
+
+            // Process horses
+            let importedCount = 0;
+            for (const row of data) {
+              if (!row.HorseName) continue;
+
+              const owner = newOwners.find(o => o.name === row.OwnerName && o.email === row.OwnerEmail);
+              const location = newLocations.find(l => l.name === row.LocationName);
+              
+              const trackingId = row.TrackingID || `TRK${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              
+              const existingHorse = await db.horses.where('tracking_id').equals(trackingId).first();
+              if (!existingHorse) {
+                await db.horses.add({
+                  name: row.HorseName,
+                  age: parseInt(row.Age) || 3,
+                  breed: row.Breed || 'Thoroughbred',
+                  color: row.Color || 'Bay',
+                  gender: row.Gender || 'gelding',
+                  status: row.Status || 'active',
+                  tracking_id: trackingId,
+                  owner_id: owner?.id || 1,
+                  current_location_id: location?.id || 1,
+                  current_activity: row.CurrentActivity || 'Stabled',
+                  created_at: new Date(),
+                  updated_at: new Date()
+                });
+                importedCount++;
+              }
+            }
+
+            await loadData();
+            setCsvFile(null);
+            setIsImportDialogOpen(false);
+            
+            toast({
+              title: "Import Complete",
+              description: `Imported ${importedCount} horses for ${selectedSeason} season`,
+            });
+          } catch (error) {
+            toast({
+              title: "Import Error",
+              description: error instanceof Error ? error.message : "Failed to import CSV data",
+              variant: "destructive",
             });
           }
-        }
-      }
-
-      // Import locations
-      if (data.locations && Array.isArray(data.locations)) {
-        for (const location of data.locations) {
-          const existingLocation = await db.locations.where('name').equals(location.name).first();
-          if (!existingLocation) {
-            await db.locations.add({
-              name: location.name,
-              type: location.type,
-              capacity: location.capacity,
-              current_occupancy: 0,
-              created_at: new Date(),
-              updated_at: new Date()
-            });
-          }
-        }
-      }
-
-      // Import horses
-      const newOwners = await db.owners.toArray();
-      const newLocations = await db.locations.toArray();
-      
-      for (const horse of data.horses) {
-        const owner = newOwners.find(o => o.name === horse.owner_name || o.email === horse.owner_email);
-        const location = newLocations.find(l => l.name === horse.location_name);
-        
-        const existingHorse = await db.horses.where('tracking_id').equals(horse.tracking_id).first();
-        if (!existingHorse) {
-          await db.horses.add({
-            name: horse.name,
-            age: horse.age || 3,
-            breed: horse.breed || 'Thoroughbred',
-            color: horse.color || 'Bay',
-            gender: horse.gender || 'gelding',
-            status: horse.status || 'active',
-            tracking_id: horse.tracking_id || `TRK${Date.now()}`,
-            owner_id: owner?.id || 1,
-            current_location_id: location?.id || 1,
-            current_activity: horse.current_activity || 'Stabled',
-            created_at: new Date(),
-            updated_at: new Date()
+        },
+        error: (error) => {
+          toast({
+            title: "Parse Error",
+            description: "Failed to parse CSV file",
+            variant: "destructive",
           });
         }
-      }
-
-      await loadData();
-      setImportData('');
-      setIsImportDialogOpen(false);
-      
-      toast({
-        title: "Import Complete",
-        description: `Imported ${data.horses.length} horses for ${selectedSeason} season`,
       });
     } catch (error) {
       toast({
-        title: "Import Error",
-        description: "Failed to import data. Please check the format.",
+        title: "File Error",
+        description: "Failed to read CSV file",
         variant: "destructive",
       });
     }
@@ -518,7 +562,7 @@ export default function SeasonManagementPage() {
                   </ul>
                 </div>
                 
-                <Button onClick={generateExportData} className="w-full">
+                <Button onClick={generateCSVExport} className="w-full">
                   <Download className="h-4 w-4 mr-2" />
                   Export Season Data
                 </Button>
@@ -544,24 +588,35 @@ export default function SeasonManagementPage() {
                     <DialogHeader>
                       <DialogTitle>Import Season Data</DialogTitle>
                       <DialogDescription>
-                        Paste your JSON data below to import horses, owners, and locations
+                        Upload a CSV file to import horses, owners, and locations. The CSV must include columns: Season, Racetrack, HorseName, OwnerName, OwnerEmail.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="import-data">JSON Data</Label>
-                        <Textarea
-                          id="import-data"
-                          placeholder="Paste your exported JSON data here..."
-                          value={importData}
-                          onChange={(e) => setImportData(e.target.value)}
-                          rows={15}
-                          className="font-mono text-sm"
+                        <Label htmlFor="csv-file">CSV File</Label>
+                        <Input
+                          id="csv-file"
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                          className="cursor-pointer"
                         />
+                        {csvFile && (
+                          <p className="text-sm text-muted-foreground">
+                            Selected: {csvFile.name} ({(csvFile.size / 1024).toFixed(1)} KB)
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <p className="font-medium">Required CSV columns:</p>
+                        <ul className="mt-1 space-y-1">
+                          <li>• Season, Racetrack, HorseName, OwnerName, OwnerEmail</li>
+                          <li>• Optional: Age, Breed, Color, Gender, Status, TrackingID, OwnerPhone, LocationName, LocationType, CurrentActivity</li>
+                        </ul>
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={handleImport} disabled={!importData.trim()}>
-                          Import Data
+                        <Button onClick={handleCSVImport} disabled={!csvFile}>
+                          Import CSV Data
                         </Button>
                         <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
                           Cancel
