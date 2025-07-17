@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Plus, Eye, Edit, Users, Map, History } from 'lucide-react';
 import { LocationMap } from '@/components/LocationMap';
 import { RaceHistoryView } from '@/components/RaceHistoryView';
+import { HorseOwnerManagement } from '@/components/HorseOwnerManagement';
 
 interface OwnerWithStats extends Owner {
   horseCount: number;
@@ -104,10 +105,14 @@ export function OwnersPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="owners" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Owners
+          </TabsTrigger>
+          <TabsTrigger value="manage" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Manage
           </TabsTrigger>
           <TabsTrigger value="locations" className="flex items-center gap-2">
             <Map className="h-4 w-4" />
@@ -332,6 +337,10 @@ export function OwnersPage() {
             ))
           )}
         </div>
+        </TabsContent>
+
+        <TabsContent value="manage">
+          <HorseOwnerManagement />
         </TabsContent>
 
         <TabsContent value="locations">

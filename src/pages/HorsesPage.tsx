@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Search, Plus, Eye, Edit } from 'lucide-react';
 import { UnifiedFilters } from '@/components/UnifiedFilters';
 import { useUnifiedFilters, filterFunctions } from '@/hooks/useUnifiedFilters';
+import { HorseOwnerManagement } from '@/components/HorseOwnerManagement';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function HorsesPage() {
   const { user } = useAuth();
@@ -70,13 +72,19 @@ export function HorsesPage() {
             Manage and view horse records and information
           </p>
         </div>
-        {(user?.role === 'admin' || user?.role === 'owner') && (
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Horse
-          </Button>
-        )}
       </div>
+
+      <Tabs defaultValue="view" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="view">View Horses</TabsTrigger>
+          <TabsTrigger value="manage">Manage Horses & Owners</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="manage" className="space-y-6">
+          <HorseOwnerManagement />
+        </TabsContent>
+
+        <TabsContent value="view" className="space-y-6">
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -200,6 +208,8 @@ export function HorsesPage() {
           ))
         )}
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
