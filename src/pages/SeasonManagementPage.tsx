@@ -176,6 +176,15 @@ export default function SeasonManagementPage() {
         throw new Error('Invalid data format');
       }
 
+      // Validate season and racetrack match current selection
+      if (data.season !== selectedSeason) {
+        throw new Error(`Data is for season ${data.season}, but you have ${selectedSeason} selected. Please switch to the correct season first.`);
+      }
+      
+      if (data.racetrack !== selectedRacetrack) {
+        throw new Error(`Data is for racetrack ${data.racetrack}, but you have ${selectedRacetrack} selected. Please switch to the correct racetrack first.`);
+      }
+
       // Import owners first
       if (data.owners && Array.isArray(data.owners)) {
         for (const owner of data.owners) {
