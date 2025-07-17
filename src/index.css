@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --primary: 212 100% 45%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 45 100% 51%;
+  --secondary-foreground: 0 0% 9%;
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */
