@@ -221,7 +221,7 @@ export function ReportsPage() {
             {user?.role === 'admin' && (
               <div className="space-y-2">
                 <Label htmlFor="owner-filter">Owner Filter</Label>
-                <Select value={selectedOwner} onValueChange={setSelectedOwner}>
+                <Select value={filters.owner || 'all'} onValueChange={(value) => updateFilter('owner', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select owner" />
                   </SelectTrigger>
