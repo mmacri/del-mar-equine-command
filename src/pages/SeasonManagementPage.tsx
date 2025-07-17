@@ -520,7 +520,7 @@ export default function SeasonManagementPage() {
                 
                 <Button onClick={generateExportData} className="w-full">
                   <Download className="h-4 w-4 mr-2" />
-                  Export {selectedSeason} Season Data
+                  Export Season Data
                 </Button>
               </CardContent>
             </Card>
