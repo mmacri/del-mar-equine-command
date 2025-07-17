@@ -13,7 +13,8 @@ import {
   Calendar,
   Database,
   FileText,
-  Activity
+  Activity,
+  Settings
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Races', href: '/races', icon: Calendar, roles: ['admin', 'viewer'] },
     { name: 'Data Grid', href: '/data-grid', icon: Database, roles: ['admin'] },
     { name: 'Reports', href: '/reports', icon: FileText, roles: ['admin', 'owner', 'viewer'] },
+    { name: 'Season Management', href: '/season-management', icon: Settings, roles: ['admin'] },
   ];
 
   const filteredNavigation = navigation.filter(item => 

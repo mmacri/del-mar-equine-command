@@ -14,6 +14,7 @@ import { OwnersPage } from "@/pages/OwnersPage";
 import { RacesPage } from "@/pages/RacesPage";
 import { DataGridPage } from "@/pages/DataGridPage";
 import { ReportsPage } from "@/pages/ReportsPage";
+import SeasonManagementPage from "@/pages/SeasonManagementPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ function AppContent() {
         <Route path="/races" element={<RacesPage />} />
         <Route path="/data-grid" element={<DataGridPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/season-management" element={<SeasonManagementPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>
