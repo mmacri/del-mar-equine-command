@@ -78,22 +78,23 @@ export function HorseOwnerManagement() {
   const generateTrackingId = async (): Promise<string> => {
     const year = new Date().getFullYear();
     let attempts = 0;
-    let trackingId = '';
-    
-    do {
+
+    while (attempts < 100) {
       attempts++;
       const randomNum = Math.floor(Math.random() * 9999) + 1;
-      trackingId = `DM${year}${String(randomNum).padStart(4, '0')}`;
-      
-      const existing = await db.horses.where('tracking_id').equals(trackingId).first();
-      if (!existing) break;
-      
-      if (attempts > 100) {
-        throw new Error('Failed to generate unique tracking ID after 100 attempts');
+      const trackingId = `DM${year}${String(randomNum).padStart(4, '0')}`;
+
+      const existing = await db.horses
+        .where('tracking_id')
+        .equals(trackingId)
+        .first();
+
+      if (!existing) {
+        return trackingId;
       }
-    } while (true);
-    
-    return trackingId;
+    }
+
+    throw new Error('Failed to generate unique tracking ID after 100 attempts');
   };
 
   // Validate unique email for owners
